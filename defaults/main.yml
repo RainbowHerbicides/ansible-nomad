@@ -149,7 +149,9 @@ nomad_gather_server_facts: false
 ### Consul
 nomad_use_consul: false
 nomad_consul_address: localhost:8500
+nomad_consul_grpc_tls_address: localhost:8503
 nomad_consul_ssl: false
+nomad_consul_grpc: false
 nomad_consul_ca_file: ""
 nomad_consul_grpc_ca_file: "{{ nomad_consul_ca_file }}"
 nomad_consul_cert_file: ""
@@ -218,3 +220,11 @@ nomad_cni_pkg: cni-plugins-linux-{{ nomad_architecture }}-v{{ nomad_cni_version 
 nomad_cni_url: https://github.com/containernetworking/plugins/releases/download/v{{ nomad_cni_version }}
 nomad_cni_zip_url: "{{ nomad_cni_url }}/{{ nomad_cni_pkg }}"
 nomad_cni_checksum_file_url: "{{ nomad_cni_zip_url }}.sha256"
+
+### Consul CNI
+nomad_consul_cni_enable: false
+nomad_consul_cni_version: "{{ lookup('env','NOMAD_CONSUL_CNI_VERSION') | default('1.6.1', true) }}"
+nomad_consul_cni_pkg: "consul-cni_{{ nomad_consul_cni_version }}_linux_{{ nomad_architecture }}.zip"
+nomad_consul_cni_url: "https://releases.hashicorp.com/consul-cni/{{ nomad_consul_cni_version }}"
+nomad_consul_cni_zip_url: "{{ nomad_consul_cni_url }}/{{ nomad_consul_cni_pkg }}"
+nomad_consul_cni_checksum_file_url: "{{ nomad_consul_cni_url }}/consul-cni_{{ nomad_consul_cni_version }}_SHA256SUMS"
