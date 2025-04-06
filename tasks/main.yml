@@ -64,6 +64,11 @@
     file: cni.yml
   when: nomad_cni_enable | bool
 
+- name: Install Consul CNI plugin
+  ansible.builtin.include_tasks:
+    file: consul_cni.yml
+  when: nomad_consul_cni_enable | bool
+
 - name: Create config directory
   ansible.builtin.file:
     dest: "{{ nomad_config_dir }}"
