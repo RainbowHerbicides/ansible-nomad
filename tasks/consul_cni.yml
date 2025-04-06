@@ -86,7 +86,7 @@
   with_fileglob:
     - "{{ install_temp.path }}/*"
   tags: installation
-  notify: restart nomad
+  notify: Restart nomad
 
 - name: Cleanup
   file:
