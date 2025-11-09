@@ -1,0 +1,55 @@
+vault {
+    enabled = {{ nomad_vault_enabled | bool | lower }}
+{% if nomad_node_role == 'client' or nomad_node_role == 'both' %}
+{% if nomad_vault_namespace is defined and nomad_vault_namespace != "" %}
+    namespace = "{{ nomad_vault_namespace }}"
+{% endif %}
+{% if nomad_vault_address is defined and nomad_vault_address != "" %}
+    address = "{{ nomad_vault_address }}"
+{% endif %}
+{% if nomad_vault_jwt_auth_backend_path is defined and nomad_vault_jwt_auth_backend_path != "" %}
+    jwt_auth_backend_path = "{{ nomad_vault_jwt_auth_backend_path }}"
+{% endif %}
+{% if nomad_vault_ca_file is defined and nomad_vault_ca_file != "" %}
+    ca_file = "{{ nomad_vault_ca_file }}"
+{% endif %}
+{% if nomad_vault_ca_path is defined and nomad_vault_ca_path != "" %}
+    ca_path = "{{ nomad_vault_ca_path }}"
+{% endif %}
+{% if nomad_vault_cert_file is defined and nomad_vault_cert_file != "" %}
+    cert_file = "{{ nomad_vault_cert_file }}"
+{% endif %}
+{% if nomad_vault_key_file is defined and nomad_vault_key_file != "" %}
+    key_file = "{{ nomad_vault_key_file }}"
+{% endif %}
+{% if nomad_vault_tls_server_name is defined and nomad_vault_tls_server_name != "" %}
+    tls_server_name = "{{ nomad_vault_tls_server_name }}"
+{% endif %}
+{% if nomad_vault_tls_skip_verify is defined %}
+    tls_skip_verify = {{ nomad_vault_tls_skip_verify | bool | lower }}
+{% endif %}
+{% endif %}
+{% if nomad_node_role == 'server' or nomad_node_role == 'both' %}
+    default_identity {
+{% if nomad_vault_default_identity_aud is defined and nomad_vault_default_identity_aud != [] %}
+        aud = {{ nomad_vault_default_identity_aud | to_json }}
+{% endif %}
+{% if nomad_vault_default_identity_env is defined and nomad_vault_default_identity_env != "" %}
+        env = {{ nomad_vault_default_identity_env | bool | lower }}
+{% endif %}
+{% if nomad_vault_default_identity_file is defined and nomad_vault_default_identity_file != "" %}
+        file = {{ nomad_vault_default_identity_file | bool | lower }}
+{% endif %}
+{% if nomad_vault_default_identity_ttl is defined and nomad_vault_default_identity_ttl != "" %}
+        ttl = "{{ nomad_vault_default_identity_ttl }}"
+{% endif %}
+{% if nomad_vault_default_identity_extra_claims is defined and nomad_vault_default_identity_extra_claims != {} %}
+        extra_claims = {
+{% for key, value in nomad_vault_default_identity_extra_claims.items() %}
+            "{{ key }}" = "{{ value }}"
+{% endfor %}
+        }
+{% endif %}
+    }
+{% endif %}
+}

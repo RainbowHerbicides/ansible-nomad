@@ -1,0 +1,44 @@
+vault {
+    enabled = {{ nomad_vault_enabled | bool | lower }}
+{% if nomad_vault_address is defined and nomad_vault_address != "" %}
+    address = "{{ nomad_vault_address }}"
+{% endif %}
+{% if nomad_vault_ca_file is defined and nomad_vault_ca_file != "" %}
+    ca_file = "{{ nomad_vault_ca_file }}"
+{% endif %}
+{% if nomad_vault_ca_path is defined and nomad_vault_ca_path != "" %}
+    ca_path = "{{ nomad_vault_ca_path }}"
+{% endif %}
+{% if nomad_vault_cert_file is defined and nomad_vault_cert_file != "" %}
+    cert_file = "{{ nomad_vault_cert_file }}"
+{% endif %}
+{% if nomad_vault_key_file is defined and nomad_vault_key_file != "" %}
+    key_file = "{{ nomad_vault_key_file }}"
+{% endif %}
+{% if nomad_vault_name is defined and nomad_vault_name != "" %}
+    name = "{{ nomad_vault_name }}" # Optional: only if you are planning to use Nomad Enterprise version
+{% endif %}
+{% if nomad_vault_namespace is defined and nomad_vault_namespace != "" %}
+    namespace = "{{ nomad_vault_namespace }}"
+{% endif %}
+{% if nomad_vault_tls_server_name is defined and nomad_vault_tls_server_name != "" %}
+    tls_server_name = "{{ nomad_vault_tls_server_name }}"
+{% endif %}
+{% if nomad_vault_tls_skip_verify is defined %}
+    tls_skip_verify = {{ nomad_vault_tls_skip_verify | bool | lower }}
+{% endif %}
+{% if nomad_node_role == 'server' or nomad_node_role == 'both' %}
+{% if nomad_vault_allow_unauthenticated is defined %}
+    allow_unauthenticated = {{ nomad_vault_allow_unauthenticated | bool | lower }}
+{% endif %}
+{% if nomad_vault_create_from_role is defined and nomad_vault_create_from_role != "" %}
+    create_from_role = "{{ nomad_vault_create_from_role }}"
+{% endif %}
+{% if nomad_vault_token is defined and nomad_vault_token != "" %}
+    token = "{{ nomad_vault_token }}"
+{% endif %}
+{% if nomad_vault_task_token_ttl is defined and nomad_vault_task_token_ttl != "" %}
+    task_token_ttl = "{{ nomad_vault_task_token_ttl }}"
+{% endif %}
+{% endif %}
+}

@@ -49,7 +49,7 @@
     state: directory
     owner: "{{ nomad_user }}"
     group: "{{ nomad_group }}"
-    mode: "0755"
+    mode: "0700"
   with_items:
     - "{{ nomad_data_dir }}"
     - "{{ nomad_plugin_dir }}"
@@ -75,7 +75,7 @@
     state: directory
     owner: root
     group: root
-    mode: "0755"
+    mode: "0700"
 
 - name: Base configuration
   ansible.builtin.template:
@@ -83,7 +83,7 @@
     dest: "{{ nomad_config_dir }}/base.hcl"
     owner: root
     group: root
-    mode: "0644"
+    mode: "0600"
   notify:
     - Restart nomad
 
@@ -106,7 +106,7 @@
     dest: "{{ nomad_config_dir }}/server.hcl"
     owner: root
     group: root
-    mode: "0644"
+    mode: "0600"
   when:
     - _nomad_node_server | bool
   notify:
@@ -128,7 +128,7 @@
     dest: "{{ nomad_config_dir }}/client.hcl"
     owner: root
     group: root
-    mode: "0644"
+    mode: "0600"
   when:
     - _nomad_node_client | bool
   notify:
@@ -150,7 +150,7 @@
     dest: "{{ nomad_config_dir }}/custom.json"
     owner: root
     group: root
-    mode: "0644"
+    mode: "0600"
   when:
     - nomad_config_custom is defined
   notify:
@@ -176,7 +176,7 @@
     dest: /etc/init.d/nomad
     owner: root
     group: root
-    mode: "0755"
+    mode: "0700"
   when: not ansible_service_mgr == "systemd" and not ansible_os_family == "Debian"
 
 - name: Debian init script
@@ -185,7 +185,7 @@
     dest: /etc/init.d/nomad
     owner: root
     group: root
-    mode: "0755"
+    mode: "0700"
   when: not ansible_service_mgr == "systemd" and ansible_os_family == "Debian"
 
 - name: Extract systemd version
@@ -208,7 +208,7 @@
     dest: "{{ nomad_systemd_unit_path }}/nomad.service"
     owner: root
     group: root
-    mode: "0644"
+    mode: "0600"
   notify:
     - Reload systemd daemon
     - Enable nomad at startup (systemd)
@@ -220,3 +220,7 @@
     enabled: true
     state: started
   when: not ansible_service_mgr == "systemd"
+
+- name: Server Role
+  ansible.builtin.debug:
+    msg: "Nomad node role: {{ nomad_node_role }}"

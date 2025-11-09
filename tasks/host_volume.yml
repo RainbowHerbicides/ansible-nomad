@@ -1,9 +1,16 @@
 ---
-- name: Create volume {{ item['name'] }}
-  ansible.builtin.file:
+- name: check nomad host volumes existence
+  stat:
+    path: "{{ item.path }}"
+  become: true
+  register: nomad_host_volumes_stat
+  loop: "{{ nomad_host_volumes }}"
+
+- name: create volume {{ item['name'] }}
+  file:
     path: "{{ item['path'] }}"
     owner: "{{ item['owner'] | default(nomad_user) }}"
     group: "{{ item['group'] | default(nomad_group) }}"
-    state: "{{ item['state'] | default('directory') }}"
+    state: directory
     mode: "{{ item['mode'] | default('0755') }}"
-  with_items: "{{ nomad_host_volumes }}"
+  loop: "{{ nomad_host_volumes | zip(nomad_host_volumes_stat.results) | selectattr('1.stat.exists', 'equalto', false) | map(attribute='0') | list }}"

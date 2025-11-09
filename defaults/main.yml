@@ -40,7 +40,7 @@ nomad_skip_ensure_all_hosts: "{{ lookup('env', 'NOMAD_SKIP_ENSURE_ALL_HOSTS') | 
 nomad_allow_purge_config: "{{ lookup('env', 'NOMAD_ALLOW_PURGE_CONFIG') | default('false', true) }}"
 
 ### Package
-nomad_version: "{{ lookup('env', 'NOMAD_VERSION') | default('1.1.1', true) }}"
+nomad_version: "{{ lookup('env', 'NOMAD_VERSION') | default('1.9.7', true) }}"
 nomad_architecture_map:
   amd64: amd64
   x86_64: amd64
@@ -143,9 +143,19 @@ nomad_ports:
 
 ### Servers
 nomad_group_name: nomad_instances
-nomad_servers: "{% if nomad_use_consul == false %}{% set _nomad_servers = [] %}{% for host in groups[nomad_group_name] %}{% set _nomad_node_role = hostvars[host]['nomad_node_role']
-  | default('client', true) %}{% if (_nomad_node_role == 'server' or _nomad_node_role == 'both') %}{% if _nomad_servers.append(host) %}{% endif %}{% endif %}{% endfor
-  %}{{ _nomad_servers }}{% else %}[]{% endif %}"
+nomad_servers: >-
+  {% if nomad_use_consul == false %}
+  {% set _nomad_servers = [] %}
+  {% for host in groups[nomad_group_name] %}
+  {% set _nomad_node_role = hostvars[host]['nomad_node_role'] | default('client', true) %}
+  {% if (_nomad_node_role == 'server' or _nomad_node_role == 'both') %}
+  {% if _nomad_servers.append(host) %}{% endif %}
+  {% endif %}
+  {% endfor %}
+  {{ _nomad_servers }}
+  {% else %}
+  []
+  {% endif %}
 nomad_gather_server_facts: false
 
 ### Consul
@@ -169,19 +179,31 @@ nomad_acl_policy_ttl: 30s
 nomad_acl_replication_token: ""
 
 ### Vault
+## Section common between auth methods
+nomad_vault_auth_method: "identity"
 nomad_vault_enabled: "{{ lookup('env', 'NOMAD_VAULT_ENABLED') | default('no', true) }}"
+nomad_vault_namespace: ""
 nomad_vault_address: "{{ vault_address | default('0.0.0.0', true) }}"
-nomad_vault_allow_unauthenticated: true
-nomad_vault_create_from_role: ""
-nomad_vault_task_token_ttl: ""
 nomad_vault_ca_file: ""
 nomad_vault_ca_path: ""
 nomad_vault_cert_file: ""
 nomad_vault_key_file: ""
 nomad_vault_tls_server_name: ""
 nomad_vault_tls_skip_verify: false
+## Section specific for identity method
+nomad_vault_jwt_auth_backend_path: "jwt-nomad"
+nomad_vault_default_identity_aud:
+  - "nomad"
+nomad_vault_default_identity_env: false
+nomad_vault_default_identity_file: false
+nomad_vault_default_identity_ttl: "30m"
+nomad_vault_default_identity_extra_claims: {}
+## Section specific for token method
+nomad_vault_name: "" # Optional: only if you are planning to use Nomad Enterprise version
+nomad_vault_allow_unauthenticated: true
+nomad_vault_create_from_role: ""
 nomad_vault_token: ""
-nomad_vault_namespace: ""
+nomad_vault_task_token_ttl: ""
 
 ### Docker
 nomad_docker_enable: "{{ lookup('env', 'NOMAD_DOCKER_ENABLE') | default('false', true) }}"
@@ -225,7 +247,7 @@ nomad_cni_checksum_file_url: "{{ nomad_cni_zip_url }}.sha256"
 
 ### Consul CNI
 nomad_consul_cni_enable: false
-nomad_consul_cni_version: "{{ lookup('env','NOMAD_CONSUL_CNI_VERSION') | default('1.6.1', true) }}"
+nomad_consul_cni_version: "{{ lookup('env', 'NOMAD_CONSUL_CNI_VERSION') | default('1.6.1', true) }}"
 nomad_consul_cni_pkg: "consul-cni_{{ nomad_consul_cni_version }}_linux_{{ nomad_architecture }}.zip"
 nomad_consul_cni_url: "https://releases.hashicorp.com/consul-cni/{{ nomad_consul_cni_version }}"
 nomad_consul_cni_zip_url: "{{ nomad_consul_cni_url }}/{{ nomad_consul_cni_pkg }}"
