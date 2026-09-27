@@ -1,7 +1,14 @@
 ---
 extends: default
 
+ignore: |
+  scratch/
+
 rules:
+  comments-indentation: false
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: true
   braces:
     max-spaces-inside: 1
     level: error

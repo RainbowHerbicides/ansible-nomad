@@ -5,15 +5,33 @@
   ansible.builtin.package:
     name: "{{ item }}"
     state: present
-  with_items: "{{ nomad_os_packages }}"
+  loop: "{{ nomad_os_packages }}"
   tags: installation
   when: not ansible_facts['os_family'] == "VMware Photon OS"
 
 - name: Install OS packages # noqa no-changed-when
   ansible.builtin.command: tdnf install {{ item }}
-  with_items: "{{ nomad_os_packages }}"
+  loop: "{{ nomad_os_packages }}"
   tags: installation
   when: ansible_facts['os_family'] == "VMware Photon OS"
+
+- name: Check for existing Nomad binary
+  ansible.builtin.stat:
+    path: "{{ nomad_bin_dir }}/nomad"
+  register: nomad_binary_installed
+  tags: installation
+
+- name: Get current Nomad version # noqa no-changed-when
+  ansible.builtin.command: "{{ nomad_bin_dir }}/nomad version"
+  changed_when: false
+  when: nomad_binary_installed.stat.exists
+  register: nomad_installed_version
+  tags: installation
+
+- name: Calculate whether to install Nomad binary
+  ansible.builtin.set_fact:
+    nomad_install_binary: "{{ not nomad_binary_installed.stat.exists or not ((nomad_installed_version.stdout | default('')) is search('Nomad v' ~ nomad_version ~ '(\\s|$)')) }}"
+  tags: installation
 
 - name: Check Nomad package checksum file
   ansible.builtin.stat:
@@ -35,13 +53,14 @@
   when: not nomad_checksum.stat.exists
   delegate_to: 127.0.0.1
 
-- name: Get Nomad package checksum # noqa no-changed-when
+- name: Get Nomad package checksum
   ansible.builtin.shell: |
     set -o pipefail
     grep "{{ nomad_pkg }}" "{{ role_path }}/files/nomad_{{ nomad_version }}_SHA256SUMS" | awk '{print $1}'
   args:
     executable: /bin/bash
   become: false
+  changed_when: false
   register: nomad_sha256
   tags: installation
   delegate_to: 127.0.0.1
@@ -73,6 +92,7 @@
   register: install_temp
   tags: installation
   delegate_to: 127.0.0.1
+  when: nomad_install_binary | bool
 
 - name: Unarchive Nomad
   ansible.builtin.unarchive:
@@ -82,6 +102,7 @@
   become: false
   tags: installation
   delegate_to: 127.0.0.1
+  when: nomad_install_binary | bool
 
 - name: Install Nomad
   ansible.builtin.copy:
@@ -91,6 +112,7 @@
     group: "{{ nomad_group }}"
     mode: "0755"
   tags: installation
+  when: nomad_install_binary | bool
 
 - name: Cleanup
   ansible.builtin.file:
@@ -99,3 +121,4 @@
   become: false
   tags: installation
   delegate_to: 127.0.0.1
+  when: nomad_install_binary | bool

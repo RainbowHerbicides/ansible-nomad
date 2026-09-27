@@ -1,35 +1,28 @@
 ---
 galaxy_info:
-  author: Brian Shumate
-  description: Nomad cluster role
-  company: Brian Shumate
-  license: BSD
-  min_ansible_version: "2.9"
+  author: Sergei Korobov
   role_name: nomad
-  namespace: community
+  namespace: sergei_korobov
+  description: Nomad cluster role
+  company: Tempico
+  license: BSD-3-Clause
+  min_ansible_version: "2.20"
+
   platforms:
-    - name: ArchLinux
-      versions:
-        - all
-    - name: EL
-      versions:
-        - "6"
-        - "7"
-    - name: Ubuntu
-      versions:
-        - vivid
-        - xenial
     - name: Debian
       versions:
-        - jessie
-    - name: Windows
+        - bookworm
+    - name: EL
       versions:
-        - 2012R2
+        - "9"
+        - "10"
+    - name: Ubuntu
+      versions:
+        - jammy
 
   galaxy_tags:
     - clustering
-    - monitoring
-    - networking
+    - nomad
     - scheduling
     - system
 

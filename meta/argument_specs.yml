@@ -1,0 +1,104 @@
+---
+argument_specs:
+  main:
+    short_description: Install and configure a Nomad cluster
+    options:
+      nomad_version:
+        type: str
+        description: Nomad version to install.
+      nomad_node_role:
+        type: str
+        description: Role of this node in the Nomad cluster.
+        choices:
+          - client
+          - server
+          - both
+      nomad_datacenter:
+        type: str
+        description: Datacenter name the node belongs to.
+      nomad_region:
+        type: str
+        description: Region the node belongs to.
+      nomad_iface:
+        type: str
+        description: Network interface used for binding and advertising.
+      nomad_bind_address:
+        type: str
+        description: Address the Nomad agent binds to.
+      nomad_advertise_address:
+        type: str
+        description: Address the Nomad agent advertises.
+      nomad_group_name:
+        type: str
+        description: Inventory group that holds all Nomad instances.
+      nomad_bootstrap_expect:
+        type: int
+        description: Number of servers expected for bootstrap.
+      nomad_user:
+        type: str
+        description: System user running Nomad.
+      nomad_group:
+        type: str
+        description: System group running Nomad.
+      nomad_manage_user:
+        type: bool
+        description: Whether the role manages the Nomad system user.
+      nomad_manage_group:
+        type: bool
+        description: Whether the role manages the Nomad system group.
+      nomad_encrypt_enable:
+        type: bool
+        description: Enable gossip encryption.
+      nomad_encrypt:
+        type: str
+        description: Gossip encryption key (generated when unset).
+      nomad_acl_enabled:
+        type: bool
+        description: Enable Nomad ACLs.
+      nomad_use_consul:
+        type: bool
+        description: Integrate Nomad with Consul (service discovery, auto-join).
+      nomad_consul_address:
+        type: str
+        description: Address of the Consul agent used by Nomad.
+      nomad_consul_ssl:
+        type: bool
+        description: Use TLS when talking to Consul.
+      nomad_consul_grpc:
+        type: bool
+        description: Use the Consul gRPC endpoint.
+      nomad_consul_token:
+        type: str
+        description: Consul ACL token used by Nomad.
+      nomad_tls_enable:
+        type: bool
+        description: Enable TLS for the Nomad agent.
+      nomad_tls_copy_keys:
+        type: bool
+        description: Copy CA certificate and keypair to the node.
+      nomad_vault_enabled:
+        type: bool
+        description: Enable Nomad and Vault integration.
+      nomad_docker_enable:
+        type: bool
+        description: Enable the Docker driver.
+      nomad_podman_enable:
+        type: bool
+        description: Enable the Podman driver plugin.
+      nomad_cni_enable:
+        type: bool
+        description: Install CNI network plugins.
+      nomad_consul_cni_enable:
+        type: bool
+        description: Install the Consul CNI plugin.
+      nomad_host_volumes:
+        type: list
+        elements: dict
+        description: Host volumes to create and expose to Nomad.
+      nomad_ports:
+        type: dict
+        description: Port map for the Nomad agent listeners.
+      nomad_enabled_schedulers:
+        type: list
+        elements: str
+        description: Schedulers enabled on server nodes.

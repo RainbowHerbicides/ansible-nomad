@@ -9,6 +9,19 @@
     group: "{{ nomad_group }}"
     mode: "0750"
 
+- name: Read installed CNI version marker
+  ansible.builtin.slurp:
+    src: "{{ nomad_cni_dir }}/.ansible_cni_version"
+  register: nomad_cni_version_marker
+  changed_when: false
+  failed_when: false
+  tags: installation
+
+- name: Calculate whether to install CNI plugins
+  ansible.builtin.set_fact:
+    nomad_cni_install: "{{ not (nomad_cni_version_marker.content is defined and nomad_cni_version_marker.content | b64decode == nomad_cni_version | string) }}"
+  tags: installation
+
 - name: Check CNI package checksum file
   ansible.builtin.stat:
     path: "{{ role_path }}/files/nomad_cni_{{ nomad_cni_version }}_SHA256SUMS"
@@ -29,13 +42,14 @@
   when: not nomad_cni_checksum.stat.exists
   delegate_to: 127.0.0.1
 
-- name: Get Nomad CNI package checksum # noqa no-changed-when
+- name: Get Nomad CNI package checksum
   ansible.builtin.shell: |
     set -o pipefail
     grep "{{ nomad_cni_pkg }}" "{{ role_path }}/files/nomad_cni_{{ nomad_cni_version }}_SHA256SUMS"  | awk '{print $1}'
   args:
     executable: /bin/bash
   become: false
+  changed_when: false
   register: nomad_cni_sha256
   tags: installation
   delegate_to: 127.0.0.1
@@ -67,6 +81,7 @@
   register: install_temp
   tags: installation
   delegate_to: 127.0.0.1
+  when: nomad_cni_install | bool
 
 - name: Unarchive Nomad CNI
   ansible.builtin.unarchive:
@@ -79,6 +94,7 @@
   become: false
   tags: installation
   delegate_to: 127.0.0.1
+  when: nomad_cni_install | bool
 
 - name: Install Nomad CNI
   ansible.builtin.copy:
@@ -87,10 +103,10 @@
     owner: "{{ nomad_user }}"
     group: "{{ nomad_group }}"
     mode: "0755"
-  with_fileglob:
-    - "{{ install_temp.path }}/*"
+  loop: "{{ q('ansible.builtin.fileglob', install_temp.path ~ '/*') }}"
   tags: installation
   notify: Restart nomad
+  when: nomad_cni_install | bool
 
 - name: Cleanup
   ansible.builtin.file:
@@ -99,3 +115,14 @@
   become: false
   tags: installation
   delegate_to: 127.0.0.1
+  when: nomad_cni_install | bool
+
+- name: Write CNI version marker
+  ansible.builtin.copy:
+    content: "{{ nomad_cni_version }}"
+    dest: "{{ nomad_cni_dir }}/.ansible_cni_version"
+    owner: "{{ nomad_user }}"
+    group: "{{ nomad_group }}"
+    mode: "0644"
+  tags: installation
+  when: nomad_cni_install | bool

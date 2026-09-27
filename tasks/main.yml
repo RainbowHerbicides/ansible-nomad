@@ -6,7 +6,7 @@
     file: asserts.yml
 
 - name: Include OS variables
-  ansible.builtin.include_vars: "{{ ansible_os_family }}.yml"
+  ansible.builtin.include_vars: "{{ ansible_facts['os_family'] }}.yml"
 
 # Gathers facts (bind address) from servers not currently targeted.
 # 'delegate_facts' is currently rather buggy in Ansible so this might not
@@ -15,7 +15,7 @@
   ansible.builtin.setup:
   delegate_to: "{{ item }}"
   delegate_facts: true
-  with_items: "{{ nomad_servers | difference(ansible_play_hosts) }}"
+  loop: "{{ nomad_servers | difference(ansible_play_hosts) }}"
   ignore_errors: true
   when: nomad_gather_server_facts | bool
 
@@ -41,7 +41,7 @@
 - name: Disable SELinux (RHEL)
   ansible.builtin.include_tasks:
     file: selinux.yml
-  when: ansible_os_family == "RedHat"
+  when: ansible_facts['os_family'] == "RedHat"
 
 - name: Create directories
   ansible.builtin.file:
@@ -50,7 +50,7 @@
     owner: "{{ nomad_user }}"
     group: "{{ nomad_group }}"
     mode: "0700"
-  with_items:
+  loop:
     - "{{ nomad_data_dir }}"
     - "{{ nomad_plugin_dir }}"
 
@@ -177,7 +177,7 @@
     owner: root
     group: root
     mode: "0700"
-  when: not ansible_service_mgr == "systemd" and not ansible_os_family == "Debian"
+  when: ansible_facts['service_mgr'] != "systemd" and ansible_facts['os_family'] != "Debian"
 
 - name: Debian init script
   ansible.builtin.template:
@@ -186,7 +186,7 @@
     owner: root
     group: root
     mode: "0700"
-  when: not ansible_service_mgr == "systemd" and ansible_os_family == "Debian"
+  when: ansible_facts['service_mgr'] != "systemd" and ansible_facts['os_family'] == "Debian"
 
 - name: Extract systemd version
   ansible.builtin.shell:
@@ -197,9 +197,9 @@
   check_mode: false
   register: systemd_version
   when:
-    - ansible_service_mgr == "systemd"
-    - not ansible_os_family == "FreeBSD"
-    - not ansible_os_family == "Solaris"
+    - ansible_facts['service_mgr'] == "systemd"
+    - not ansible_facts['os_family'] == "FreeBSD"
+    - not ansible_facts['os_family'] == "Solaris"
   tags: skip_ansible_lint
 
 - name: Create systemd unit
@@ -212,14 +212,14 @@
   notify:
     - Reload systemd daemon
     - Enable nomad at startup (systemd)
-  when: ansible_service_mgr == "systemd"
+  when: ansible_facts['service_mgr'] == "systemd"
 
 - name: Start Nomad
   ansible.builtin.service:
     name: nomad
     enabled: true
     state: started
-  when: not ansible_service_mgr == "systemd"
+  when: ansible_facts['service_mgr'] != "systemd"
 
 - name: Server Role
   ansible.builtin.debug:

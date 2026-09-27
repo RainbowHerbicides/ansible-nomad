@@ -2,8 +2,8 @@
 - name: Converge
   hosts: all
   roles:
-    - role: ansible-nomad
+    - role: sergei_korobov.nomad
 
   vars:
     # TODO: Probably we need to install syslog-ng/rsyslog first
-    nomad_syslog_enable: False
+    nomad_syslog_enable: false

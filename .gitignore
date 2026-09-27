@@ -5,7 +5,10 @@
 examples/hashistack
 examples/hosts
 files/*.zip
+files/*.tgz
 files/nomad
 nomad_*_SHA256SUMS
 *.swp
 .idea/
+.ansible/
+scratch/
