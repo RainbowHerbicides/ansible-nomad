@@ -24,7 +24,7 @@
   loop: "{{ lookup('dict', os_supported_matrix) }}"
   no_log: true
   when:
-    - ansible_distribution in item.key
+    - ansible_facts['distribution'] in item.key
 
 - name: Os_supported_matrix | check distribution version
   ansible.builtin.assert:
