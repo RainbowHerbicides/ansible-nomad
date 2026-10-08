@@ -172,6 +172,65 @@ nomad_consul_token: ""
 nomad_consul_servers_service_name: nomad-servers
 nomad_consul_clients_service_name: nomad-clients
 nomad_consul_tags: []
+
+### Consul Workload Identity
+# Nomad 1.10 removed the legacy token-based authentication workflow for
+# Consul: tasks and services must use workload identities (JWTs signed by
+# Nomad) to obtain Consul ACL tokens. This mirrors the Vault "identity"
+# support of this role.
+nomad_consul_workload_identity: false
+
+# Audience shared by the default identities and the Consul auth method
+# BoundAudiences (they must match for the JWT login to succeed).
+nomad_consul_workload_identity_aud:
+  - "consul.io"
+
+## Server-only: default identities the Nomad servers inject into jobs
+## that need Consul access (consul.service_identity / consul.task_identity).
+nomad_consul_service_identity_ttl: "1h"
+nomad_consul_task_identity_env: false
+nomad_consul_task_identity_file: false
+nomad_consul_task_identity_ttl: "1h"
+
+## Client-only: Consul auth methods used to exchange the identities for
+## Consul ACL tokens.
+nomad_consul_service_auth_method: "nomad-workloads"
+nomad_consul_task_auth_method: "nomad-workloads"
+
+## Consul-side provisioning of the objects `nomad setup consul` creates
+## (JWT auth method, binding rules, policy, role). Requires a Consul token
+## with acl:write. Runs once per play against the Consul API address/TLS
+## settings the Nomad agent itself uses.
+nomad_consul_manage_workload_identity: false
+nomad_consul_jwks_url: "http://{{ nomad_advertise_address }}:{{ nomad_ports['http'] }}/.well-known/jwks.json"
+# CA certificate file (on the managed host) used by Consul to validate the
+# JWKS URL when Nomad HTTP TLS is enabled. Embedded as the JWKSCACert
+# config parameter, mirroring `nomad setup consul -jwks-ca-file`.
+nomad_consul_jwks_ca_file: ""
+nomad_consul_auth_method_description: "Login method for Nomad workloads using workload identities"
+nomad_consul_service_binding_name: "${value.nomad_service}"
+nomad_consul_task_binding_name: "nomad-${value.nomad_namespace}-tasks"
+nomad_consul_task_policy_name: "policy-nomad-tasks"
+nomad_consul_task_policy_rules: |-
+  node_prefix "" {
+    policy = "read"
+  }
+
+  service_prefix "" {
+    policy = "read"
+  }
+
+  key_prefix "" {
+    policy = "read"
+  }
+nomad_consul_task_role_name: "nomad-default-tasks"
+nomad_consul_task_role_description: "Role for Nomad tasks using workload identities"
+# Token with acl:write used for provisioning. When empty the role reads the
+# Consul master token (acl.tokens.master or acl.tokens.initial_management)
+# from the configuration file of the co-located Consul agent.
+nomad_consul_manage_token: ""
+nomad_consul_manage_token_config_path: /etc/consul/config.json
+
 ### ACLs
 nomad_acl_enabled: "{{ lookup('env', 'NOMAD_ACL_ENABLED') | default('no', true) }}"
 nomad_acl_token_ttl: 30s

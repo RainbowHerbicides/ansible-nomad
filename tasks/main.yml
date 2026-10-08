@@ -224,3 +224,11 @@
 - name: Server Role
   ansible.builtin.debug:
     msg: "Nomad node role: {{ nomad_node_role }}"
+
+- name: Consul Workload Identity | provision Consul objects
+  ansible.builtin.include_tasks:
+    file: consul_identity.yml
+  when:
+    - nomad_use_consul | bool
+    - nomad_consul_workload_identity | bool
+    - nomad_consul_manage_workload_identity | bool

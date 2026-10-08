@@ -70,6 +70,18 @@ argument_specs:
       nomad_consul_token:
         type: str
         description: Consul ACL token used by Nomad.
+      nomad_consul_workload_identity:
+        type: bool
+        description: Configure Consul workload identities (service_identity/task_identity on servers, auth methods on clients).
+      nomad_consul_manage_workload_identity:
+        type: bool
+        description: Provision the Consul auth method, binding rules, policy and role required by Consul workload identities.
+      nomad_consul_jwks_url:
+        type: str
+        description: Nomad JWKS endpoint used by the Consul auth method to validate workload identities.
+      nomad_consul_manage_token:
+        type: str
+        description: Consul token with acl:write used for provisioning. Falls back to the co-located Consul agent master token when empty.
       nomad_tls_enable:
         type: bool
         description: Enable TLS for the Nomad agent.

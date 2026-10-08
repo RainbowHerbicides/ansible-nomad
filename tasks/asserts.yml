@@ -40,3 +40,16 @@
   ansible.builtin.fail:
     msg: nomad_group_name must be included in groups.
   when: nomad_group_name not in groups
+
+- name: Consul Workload Identity | check Nomad version
+  ansible.builtin.assert:
+    quiet: true
+    fail_msg: >-
+      Consul workload identity requires Nomad 1.8.0+ (consul.service_identity
+      and consul.task_identity were added in Nomad 1.7.0 and the legacy
+      token-based authentication was removed in Nomad 1.10.0).
+    that:
+      - nomad_version is version('1.8.0', '>=')
+  when:
+    - nomad_use_consul | bool
+    - nomad_consul_workload_identity | bool

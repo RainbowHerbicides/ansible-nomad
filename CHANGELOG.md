@@ -1,5 +1,12 @@
 ## NEXT
 
+- Add Consul Workload Identity support for Nomad >= 1.8 (required from Nomad
+  1.10, which removed the token-based authentication workflow):
+  `nomad_consul_workload_identity` renders `consul.service_identity` /
+  `consul.task_identity` (servers) and `consul.service_auth_method` /
+  `consul.task_auth_method` (clients); `nomad_consul_manage_workload_identity`
+  provisions the matching Consul auth method, binding rules, policy and role
+  (same objects as `nomad setup consul`), idempotently via the Consul HTTP API.
 - Add host_volume for nomad client (thanks @ducminhle)
 - Update CONTRIBUTORS
 - Update documentation

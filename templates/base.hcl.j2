@@ -43,6 +43,30 @@ consul {
     # Enabling the server and client to bootstrap using Consul.
     server_auto_join = true
     client_auto_join = true
+
+{% if nomad_consul_workload_identity | bool %}
+{% if _nomad_node_server | bool %}
+    # Default workload identities used by services and tasks to obtain
+    # Consul ACL tokens (token-based auth was removed in Nomad 1.10).
+    # aud must match the BoundAudiences of the Consul auth method.
+    service_identity {
+        aud = {{ nomad_consul_workload_identity_aud | to_json }}
+        ttl = "{{ nomad_consul_service_identity_ttl }}"
+    }
+
+    task_identity {
+        aud = {{ nomad_consul_workload_identity_aud | to_json }}
+        env = {{ nomad_consul_task_identity_env | bool | lower }}
+        file = {{ nomad_consul_task_identity_file | bool | lower }}
+        ttl = "{{ nomad_consul_task_identity_ttl }}"
+    }
+{% endif %}
+{% if _nomad_node_client | bool %}
+    # Auth methods used to exchange workload identities for Consul tokens.
+    service_auth_method = "{{ nomad_consul_service_auth_method }}"
+    task_auth_method = "{{ nomad_consul_task_auth_method }}"
+{% endif %}
+{% endif %}
 }
 {% endif %}
 
