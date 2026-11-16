@@ -114,6 +114,8 @@ client {
 {{ key | indent(count*width, first=True) }} {
 {{ plugin_config(value, count=next_count, width=width) }}
 {{ '}' | indent(count*width, first=True) }}
+{% elif value is sequence and value is not string %}
+{{ key | indent(count*width, first=True) }} = {{ value | to_json }}
 {% else %}
 {{ key | indent(count*width, first=True) }} = {% if value is string %}"{{ value }}"{% else %}{{ value | string | lower }}{% endif %}
 
@@ -121,7 +123,12 @@ client {
 {% endfor %}
 {% endmacro %}
 
-{% for key, value in nomad_plugins.items() %}
+{% if nomad_nvidia_enable | bool %}
+{% set _nomad_nvidia_plugin = {'nomad-device-nvidia': {'config': {'enabled': true, 'ignored_gpu_ids': nomad_nvidia_ignored_gpu_ids, 'fingerprint_period': nomad_nvidia_fingerprint_period}}} %}
+{% else %}
+{% set _nomad_nvidia_plugin = {} %}
+{% endif %}
+{% for key, value in (_nomad_nvidia_plugin | combine(nomad_plugins)).items() %}
 plugin "{{ key }}" {
 {{ plugin_config(value) | replace('\'', '\"') }}
 }

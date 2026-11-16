@@ -1,0 +1,41 @@
+---
+scenario:
+  test_sequence:
+    - dependency
+    - syntax
+    - create
+    - prepare
+    - converge
+    - verify
+    - destroy
+dependency:
+  name: galaxy
+driver:
+  name: docker
+provisioner:
+  name: ansible
+  config_options:
+    defaults:
+      deprecation_warnings: false
+  playbooks:
+    prepare: prepare.yml
+    converge: converge.yml
+  inventory:
+    group_vars:
+      nomad_instances:
+        nomad_node_role: both
+verifier:
+  name: ansible
+platforms:
+  - name: debian-12-nvidia
+    groups:
+      - nomad_instances
+    image: dokken/debian-12
+    dockerfile: ../_shared/Dockerfile.j2
+    capabilities:
+      - SYS_ADMIN
+    cgroupns_mode: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    privileged: true
+    command: /bin/systemd

@@ -1,0 +1,38 @@
+---
+- name: Verify
+  hosts: all
+  tasks:
+
+    - name: Verify that the nvidia plugin stanza is rendered
+      ansible.builtin.command: grep -F 'plugin "nomad-device-nvidia"' /etc/nomad.d/client.hcl
+      changed_when: false
+
+    - name: Verify that ignored_gpu_ids renders as an HCL list
+      ansible.builtin.command: grep -F 'ignored_gpu_ids = []' /etc/nomad.d/client.hcl
+      changed_when: false
+
+    - name: Verify that the nvidia plugin binary is installed
+      ansible.builtin.stat:
+        path: /var/nomad/plugins/nomad-device-nvidia
+      register: result_nomad_nvidia_plugin
+      when: ansible_facts['architecture'] == 'x86_64'
+
+    - name: Validate that the nvidia plugin binary is installed
+      ansible.builtin.assert:
+        that:
+          - result_nomad_nvidia_plugin.stat.exists
+          - result_nomad_nvidia_plugin.stat.mode == '0755'
+      when: ansible_facts['architecture'] == 'x86_64'
+
+    - name: Verify that serivce nomad is running
+      ansible.builtin.service:
+        name: nomad
+        state: started
+      register: result_nomad_service
+
+    - name: Validate that serivce nomad is running
+      ansible.builtin.assert:
+        that:
+          - result_nomad_service.state == 'started'
+          - result_nomad_service.changed == false
+          - result_nomad_service.name == 'nomad'

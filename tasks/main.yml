@@ -59,6 +59,18 @@
     file: install_podman.yml
   when: nomad_podman_enable | bool
 
+- name: Install NVIDIA device plugin
+  ansible.builtin.include_tasks:
+    file: install_nvidia.yml
+  when:
+    - nomad_nvidia_enable | bool
+    - nomad_nvidia_install_binary | bool
+
+- name: Install NVIDIA Container Toolkit
+  ansible.builtin.include_tasks:
+    file: nvidia_toolkit.yml
+  when: nomad_nvidia_toolkit_enable | bool
+
 - name: Install CNI plugin
   ansible.builtin.include_tasks:
     file: cni.yml

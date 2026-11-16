@@ -1,0 +1,44 @@
+---
+# Scenario-local prepare: the shared ../_shared/prepare.yml installs
+# unzip on the controller with become: true and installs netaddr with
+# the pip module, both of which fail on machines without passwordless
+# sudo or with a PEP 668-managed system python. This variant only
+# verifies the two controller-side requirements: unzip (macOS ships
+# /usr/bin/unzip) and netaddr for the ipaddr filters (install it in the
+# virtualenv that runs molecule, e.g. `pip install netaddr`).
+- name: Prepare
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+
+    - name: Verify unzip on the controlling host
+      ansible.builtin.shell: command -v unzip
+      args:
+        executable: /bin/bash
+      changed_when: false
+      register: _nomad_nvidia_unzip_check
+      failed_when: false
+
+    - name: Require unzip on the controlling host
+      ansible.builtin.fail:
+        msg: >-
+          unzip is required on the controlling host: the role unarchives
+          the nomad package locally (macOS ships /usr/bin/unzip).
+      when: _nomad_nvidia_unzip_check.rc != 0
+
+    - name: Verify netaddr is importable by the ansible python
+      ansible.builtin.shell: "{{ ansible_playbook_python }} -c 'import netaddr'"
+      args:
+        executable: /bin/bash
+      changed_when: false
+      register: _nomad_nvidia_netaddr_check
+      failed_when: false
+
+    - name: Require netaddr on the controlling host
+      ansible.builtin.fail:
+        msg: >-
+          netaddr is required on the controlling host for the ipaddr
+          filters. Install it in the python environment that runs
+          molecule: pip install netaddr.
+      when: _nomad_nvidia_netaddr_check.rc != 0

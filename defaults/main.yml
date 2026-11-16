@@ -311,3 +311,28 @@ nomad_consul_cni_pkg: "consul-cni_{{ nomad_consul_cni_version }}_linux_{{ nomad_
 nomad_consul_cni_url: "https://releases.hashicorp.com/consul-cni/{{ nomad_consul_cni_version }}"
 nomad_consul_cni_zip_url: "{{ nomad_consul_cni_url }}/{{ nomad_consul_cni_pkg }}"
 nomad_consul_cni_checksum_file_url: "{{ nomad_consul_cni_url }}/consul-cni_{{ nomad_consul_cni_version }}_SHA256SUMS"
+
+### NVIDIA GPU device plugin
+## Installs the nomad-device-nvidia binary into nomad_plugin_dir and
+## renders the plugin stanza in client.hcl (client nodes).
+nomad_nvidia_enable: false
+nomad_nvidia_version: "{{ lookup('env', 'NOMAD_NVIDIA_VERSION') | default('1.1.0', true) }}"
+## The 1.1.0 release publishes linux amd64 binaries only (arm64 builds
+## are unreleased upstream). Set to false to render the stanza without
+## downloading the binary, for example on GPU-less or non-amd64 hosts.
+nomad_nvidia_install_binary: true
+nomad_nvidia_pkg: "nomad-device-nvidia_{{ nomad_nvidia_version }}_linux_{{ nomad_architecture }}.zip"
+nomad_nvidia_url: "https://releases.hashicorp.com/nomad-device-nvidia/{{ nomad_nvidia_version }}"
+nomad_nvidia_zip_url: "{{ nomad_nvidia_url }}/{{ nomad_nvidia_pkg }}"
+nomad_nvidia_checksum_file_url: "{{ nomad_nvidia_url }}/nomad-device-nvidia_{{ nomad_nvidia_version }}_SHA256SUMS"
+## Plugin stanza options (plugin "nomad-device-nvidia" block).
+nomad_nvidia_ignored_gpu_ids: []
+nomad_nvidia_fingerprint_period: "1m"
+## NVIDIA Container Toolkit from the NVIDIA repositories. The GPU
+## driver itself (with nvidia-smi) is a prerequisite and stays
+## unmanaged - see README.md for Rocky Linux 10 driver installation.
+nomad_nvidia_toolkit_enable: false
+## Register the nvidia runtime with the docker daemon
+## (nvidia-ctk runtime configure) and restart docker. Requires a
+## docker daemon on the host; this role does not install docker.
+nomad_nvidia_toolkit_configure_docker: true

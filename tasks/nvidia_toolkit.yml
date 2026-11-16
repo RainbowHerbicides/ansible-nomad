@@ -1,0 +1,78 @@
+---
+# File: nvidia_toolkit.yml - NVIDIA Container Toolkit installation
+#
+# Installs nvidia-container-toolkit from the NVIDIA repositories. The
+# NVIDIA GPU driver (with nvidia-smi) is a prerequisite and is NOT
+# managed by this role - see README.md for Rocky Linux 10 driver
+# installation (proprietary and open kernel modules).
+
+- name: NVIDIA toolkit | stat GPG keyring
+  ansible.builtin.stat:
+    path: /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+  register: nomad_nvidia_keyring
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: NVIDIA toolkit | install repo prerequisites
+  ansible.builtin.package:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg2
+    state: present
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: NVIDIA toolkit | dearmor GPG key
+  ansible.builtin.shell: |
+    set -o pipefail
+    curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+    chmod 0644 /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+  args:
+    executable: /bin/bash
+  changed_when: true
+  when:
+    - ansible_facts['os_family'] == 'Debian'
+    - not nomad_nvidia_keyring.stat.exists
+
+- name: NVIDIA toolkit | add apt repository
+  ansible.builtin.copy:
+    content: "deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://nvidia.github.io/libnvidia-container/stable/deb/{{ ansible_facts['dpkg_architecture'] }} /\n"
+    dest: /etc/apt/sources.list.d/nvidia-container-toolkit.list
+    mode: "0644"
+  register: nomad_nvidia_deb_repo
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: NVIDIA toolkit | update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when:
+    - ansible_facts['os_family'] == 'Debian'
+    - nomad_nvidia_deb_repo is changed
+
+- name: NVIDIA toolkit | add dnf repository
+  ansible.builtin.get_url:
+    url: https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo
+    dest: /etc/yum.repos.d/nvidia-container-toolkit.repo
+    mode: "0644"
+  when: ansible_facts['os_family'] == 'RedHat'
+
+- name: NVIDIA toolkit | install nvidia-container-toolkit
+  ansible.builtin.package:
+    name: nvidia-container-toolkit
+    state: present
+
+- name: NVIDIA toolkit | check docker runtime config
+  ansible.builtin.slurp:
+    src: /etc/docker/daemon.json
+  register: nomad_nvidia_docker_daemon_json
+  failed_when: false
+  when: nomad_nvidia_toolkit_configure_docker | bool
+
+- name: NVIDIA toolkit | register nvidia runtime with docker
+  ansible.builtin.command: nvidia-ctk runtime configure --runtime=docker
+  changed_when: true
+  when:
+    - nomad_nvidia_toolkit_configure_docker | bool
+    - nomad_nvidia_docker_daemon_json.content is not defined or '"nvidia"' not in (nomad_nvidia_docker_daemon_json.content | b64decode)
+  notify:
+    - Restart docker

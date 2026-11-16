@@ -471,6 +471,40 @@ nomad_plugins:
       recover_stopped: true
 ```
 
+### `nomad_nvidia_enable`
+- Install the `nomad-device-nvidia` plugin binary into `nomad_plugin_dir`
+  and render the plugin stanza in `client.hcl`
+- Default value: **false**
+
+### `nomad_nvidia_version`
+- Version of the `nomad-device-nvidia` plugin to install
+- Default value: **1.1.0**
+
+### `nomad_nvidia_install_binary`
+- Download and install the plugin binary; set to `false` to render the
+  stanza only. The 1.1.0 release publishes `linux_amd64` binaries only
+  (arm64 builds are unreleased upstream)
+- Default value: **true**
+
+### `nomad_nvidia_ignored_gpu_ids`
+- GPU UUIDs that the plugin must not fingerprint
+- Default value: `[]`
+
+### `nomad_nvidia_fingerprint_period`
+- Interval at which the plugin repeats device fingerprinting
+- Default value: **1m**
+
+### `nomad_nvidia_toolkit_enable`
+- Install `nvidia-container-toolkit` from the NVIDIA repositories
+- Default value: **false**
+
+### `nomad_nvidia_toolkit_configure_docker`
+- Register the `nvidia` runtime with the docker daemon
+  (`nvidia-ctk runtime configure`) and restart docker when the
+  configuration changes. Requires a docker daemon on the host; this
+  role does not install docker
+- Default value: **true**
+
 ### `nomad_group_name`
 
 - Ansible group that contains all cluster nodes
@@ -1026,6 +1060,156 @@ An example usage for enabling `vault`:
         key_file         : "/var/certs/vault.key"
         address          : "https://vault.service.consul:8200"
         create_from_role : "nomad-cluster"
+```
+
+## NVIDIA GPU support
+
+The role can expose NVIDIA GPUs to Nomad jobs with the
+[standalone NVIDIA device plugin](https://developer.hashicorp.com/nomad/plugins/devices/nvidia).
+Four parts must be in place on a GPU node:
+
+1. The NVIDIA GPU driver (with `nvidia-smi`) — not managed by this role.
+2. The NVIDIA Container Toolkit and its `nvidia` docker runtime.
+3. The `nomad-device-nvidia` binary in `nomad_plugin_dir`
+   (`/var/nomad/plugins` by default).
+4. The plugin stanza in the client configuration.
+
+Set the following variables:
+
+```yaml
+nomad_docker_enable: true
+nomad_nvidia_enable: true                    # parts 3 and 4
+nomad_nvidia_toolkit_enable: true            # part 2
+nomad_nvidia_toolkit_configure_docker: true   # register the nvidia runtime
+```
+
+Notes:
+
+- The plugin fingerprints GPUs through NVML and reports no devices on
+  GPU-less hosts, so the agent stays healthy there.
+- A `nomad-device-nvidia` key in `nomad_plugins` overrides the generated
+  stanza.
+- On RedHat family nodes the role disables SELinux when
+  `nomad_docker_enable` is true (existing behavior), which also covers
+  the GPU container path.
+
+### Rocky Linux 10: proprietary or open GPU drivers
+
+Rocky Linux 10 is supported by the CUDA `rhel10` network repository
+(CUDA 13.5, kernel 6.12.0-211 and later). Enable the repository:
+
+```
+sudo dnf config-manager --add-repo \
+  https://developer.download.nvidia.com/compute/cuda/repos/rhel10/x86_64/cuda-rhel10.repo
+```
+
+Choose one driver flavor — do not install both.
+
+Proprietary kernel modules (the classic datacenter driver):
+
+```
+sudo dnf install cuda-drivers
+```
+
+Open kernel modules (source published at
+[NVIDIA/open-gpu-kernel-modules](https://github.com/NVIDIA/open-gpu-kernel-modules);
+usable on any Turing or newer GPU and required for Grace Hopper,
+Blackwell, and later GPUs):
+
+```
+sudo dnf install nvidia-open
+```
+
+Then reboot the node and check the driver:
+
+```
+nvidia-smi
+```
+
+Starting with CUDA 13.4 the driver is versioned and installed
+independently of the CUDA Toolkit; `cuda-toolkit` is not required for
+workloads that ship their own CUDA runtime.
+
+### NVIDIA Container Toolkit and the docker runtime
+
+`nomad_nvidia_toolkit_enable` installs the `nvidia-container-toolkit`
+package from the NVIDIA repository (apt on Debian family, dnf on RedHat
+family). These are the equivalent manual steps:
+
+```
+# Debian family
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | \
+  sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+  sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+  sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
+
+# RedHat family
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo | \
+  sudo tee /etc/yum.repos.d/nvidia-container-toolkit.repo
+sudo dnf install -y nvidia-container-toolkit
+```
+
+`nomad_nvidia_toolkit_configure_docker` registers the `nvidia` runtime
+with the docker daemon and restarts docker when the configuration
+changes. The manual equivalent:
+
+```
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+```
+
+Verify that docker can reach the GPU:
+
+```
+docker run --rm --gpus all nvidia/cuda:12.8.1-base-ubuntu22.04 nvidia-smi
+```
+
+The Nomad docker driver selects the `nvidia` runtime automatically for
+tasks that reserve a GPU device. Its plugin option `nvidia_runtime`
+defaults to `nvidia`; override it through `nomad_plugins` when your
+runtime has a different name:
+
+```yaml
+nomad_plugins:
+  docker:
+    config:
+      nvidia_runtime: "nvidia"
+```
+
+### Test job
+
+```hcl
+job "gpu-test" {
+  datacenters = ["dc1"]
+  type        = "batch"
+
+  group "smi" {
+    task "smi" {
+      driver = "docker"
+
+      config {
+        image   = "nvidia/cuda:12.8.1-base-ubuntu22.04"
+        command = "nvidia-smi"
+      }
+
+      resources {
+        device "nvidia/gpu" {
+          count = 1
+        }
+      }
+    }
+  }
+}
+```
+
+After the job runs, the node lists the GPU:
+
+```
+$ nomad node status <node-id>
+Device Resource Utilization
+nvidia/gpu/NVIDIA A10[GPU-02ce5b56-...]  0 / 23028 MiB
 ```
 
 ## Dependencies

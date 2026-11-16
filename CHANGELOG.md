@@ -1,5 +1,15 @@
 ## NEXT
 
+## 1.9.7
+
+- Add NVIDIA GPU device plugin support: `nomad_nvidia_enable` installs
+  the `nomad-device-nvidia` binary into `nomad_plugin_dir` and renders
+  the plugin stanza in `client.hcl` (a `nomad-device-nvidia` key in
+  `nomad_plugins` overrides the generated block);
+  `nomad_nvidia_toolkit_enable` installs the NVIDIA Container Toolkit
+  from the NVIDIA repositories and registers the `nvidia` docker
+  runtime. GPU drivers stay unmanaged - README documents Rocky Linux 10
+  proprietary (`cuda-drivers`) and open (`nvidia-open`) driver install.
 - Add Consul Workload Identity support for Nomad >= 1.8 (required from Nomad
   1.10, which removed the token-based authentication workflow):
   `nomad_consul_workload_identity` renders `consul.service_identity` /

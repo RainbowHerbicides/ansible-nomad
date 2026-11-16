@@ -1,0 +1,14 @@
+---
+- name: Converge
+  hosts: all
+  roles:
+    - role: sergei_korobov.nomad
+
+  vars:
+    # TODO: Probably we need to install syslog-ng/rsyslog first
+    nomad_syslog_enable: false
+    nomad_nvidia_enable: true
+    # The nomad-device-nvidia 1.1.0 release publishes linux amd64
+    # binaries only; on non-amd64 test hosts skip the binary download
+    # and verify the configuration rendering only.
+    nomad_nvidia_install_binary: "{{ ansible_facts['architecture'] == 'x86_64' }}"
