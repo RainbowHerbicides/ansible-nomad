@@ -21,393 +21,393 @@
 - name: Consul Workload Identity | provision Consul objects
   run_once: true
   block:
-  - name: Consul Workload Identity | resolve management token from co-located Consul agent
-    when: nomad_consul_manage_token | length == 0
-    block:
-      - name: Consul Workload Identity | read Consul agent configuration
-        ansible.builtin.slurp:
-          src: "{{ nomad_consul_manage_token_config_path }}"
-        register: _nomad_consul_config_read
-        no_log: true
+    - name: Consul Workload Identity | resolve management token from co-located Consul agent
+      when: nomad_consul_manage_token | length == 0
+      block:
+        - name: Consul Workload Identity | read Consul agent configuration
+          ansible.builtin.slurp:
+            src: "{{ nomad_consul_manage_token_config_path }}"
+          register: _nomad_consul_config_read
+          no_log: true
 
-      - name: Consul Workload Identity | extract master token from Consul configuration
-        ansible.builtin.set_fact:
-          _nomad_consul_manage_token: "{{ (_nomad_consul_config_read.content | b64decode | from_json).acl.tokens.master | default('', true) or (_nomad_consul_config_read.content | b64decode | from_json).acl.tokens.initial_management | default('', true) }}"
-        no_log: true
+        - name: Consul Workload Identity | extract master token from Consul configuration
+          ansible.builtin.set_fact:
+            _nomad_consul_manage_token: "{{ (_nomad_consul_config_read.content | b64decode | from_json).acl.tokens.master | default('', true) or (_nomad_consul_config_read.content | b64decode | from_json).acl.tokens.initial_management | default('', true) }}"
+          no_log: true
 
-      - name: Consul Workload Identity | require a Consul management token
-        ansible.builtin.fail:
-          msg: >-
-            No Consul token with acl:write found. Set nomad_consul_manage_token
-            or make the Consul master token available as acl.tokens.master (or
-            acl.tokens.initial_management) in
-            {{ nomad_consul_manage_token_config_path }}.
-        when: _nomad_consul_manage_token | default('', true) | length == 0
+        - name: Consul Workload Identity | require a Consul management token
+          ansible.builtin.fail:
+            msg: >-
+              No Consul token with acl:write found. Set nomad_consul_manage_token
+              or make the Consul master token available as acl.tokens.master (or
+              acl.tokens.initial_management) in
+              {{ nomad_consul_manage_token_config_path }}.
+          when: _nomad_consul_manage_token | default('', true) | length == 0
 
-  - name: Consul Workload Identity | use explicit management token
-    ansible.builtin.set_fact:
-      _nomad_consul_manage_token: "{{ nomad_consul_manage_token }}"
-    when: nomad_consul_manage_token | length > 0
-    no_log: true
+    - name: Consul Workload Identity | use explicit management token
+      ansible.builtin.set_fact:
+        _nomad_consul_manage_token: "{{ nomad_consul_manage_token }}"
+      when: nomad_consul_manage_token | length > 0
+      no_log: true
 
-  - name: Consul Workload Identity | read JWKS CA certificate
-    ansible.builtin.slurp:
-      src: "{{ nomad_consul_jwks_ca_file }}"
-    register: _nomad_consul_jwks_ca_read
-    when: nomad_consul_jwks_ca_file | length > 0
+    - name: Consul Workload Identity | read JWKS CA certificate
+      ansible.builtin.slurp:
+        src: "{{ nomad_consul_jwks_ca_file }}"
+      register: _nomad_consul_jwks_ca_read
+      when: nomad_consul_jwks_ca_file | length > 0
 
-  - name: Consul Workload Identity | build desired auth method configuration
-    ansible.builtin.set_fact:
-      _nomad_consul_api_url: "{{ 'https' if nomad_consul_ssl | bool else 'http' }}://{{ nomad_consul_address }}"
-      _nomad_consul_auth_method_config:
-        JWKSURL: "{{ nomad_consul_jwks_url }}"
-        JWTSupportedAlgs:
-          - "RS256"
-        BoundAudiences: "{{ nomad_consul_workload_identity_aud }}"
-        ClaimMappings:
-          consul_namespace: consul_namespace
-          nomad_namespace: nomad_namespace
-          nomad_job_id: nomad_job_id
-          nomad_task: nomad_task
-          nomad_service: nomad_service
+    - name: Consul Workload Identity | build desired auth method configuration
+      ansible.builtin.set_fact:
+        _nomad_consul_api_url: "{{ 'https' if nomad_consul_ssl | bool else 'http' }}://{{ nomad_consul_address }}"
+        _nomad_consul_auth_method_config:
+          JWKSURL: "{{ nomad_consul_jwks_url }}"
+          JWTSupportedAlgs:
+            - "RS256"
+          BoundAudiences: "{{ nomad_consul_workload_identity_aud }}"
+          ClaimMappings:
+            consul_namespace: consul_namespace
+            nomad_namespace: nomad_namespace
+            nomad_job_id: nomad_job_id
+            nomad_task: nomad_task
+            nomad_service: nomad_service
 
-  - name: Consul Workload Identity | embed JWKS CA certificate when configured
-    ansible.builtin.set_fact:
-      _nomad_consul_auth_method_config: "{{ _nomad_consul_auth_method_config | combine({'JWKSCACert': _nomad_consul_jwks_ca_read.content | b64decode}) }}"
-    when: nomad_consul_jwks_ca_file | length > 0
+    - name: Consul Workload Identity | embed JWKS CA certificate when configured
+      ansible.builtin.set_fact:
+        _nomad_consul_auth_method_config: "{{ _nomad_consul_auth_method_config | combine({'JWKSCACert': _nomad_consul_jwks_ca_read.content | b64decode}) }}"
+      when: nomad_consul_jwks_ca_file | length > 0
 
-  - name: Consul Workload Identity | read auth method
-    ansible.builtin.uri:
-      url: "{{ _nomad_consul_api_url }}/v1/acl/auth-method/{{ item }}"
-      method: GET
-      headers:
-        X-Consul-Token: "{{ _nomad_consul_manage_token }}"
-      status_code:
-        - 200
-        - 404
-      validate_certs: "{{ nomad_consul_ssl | bool }}"
-      ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
-      client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
-      client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
-    loop: "{{ [nomad_consul_service_auth_method, nomad_consul_task_auth_method] | unique }}"
-    register: _nomad_consul_auth_method_read
-    # The Consul restart that activates ACLs is flushed right before this
-    # include; give the server time to elect a leader on the first run.
-    until: _nomad_consul_auth_method_read.status in [200, 404]
-    retries: 12
-    delay: 5
-    changed_when: false
-    no_log: true
+    - name: Consul Workload Identity | read auth method
+      ansible.builtin.uri:
+        url: "{{ _nomad_consul_api_url }}/v1/acl/auth-method/{{ item }}"
+        method: GET
+        headers:
+          X-Consul-Token: "{{ _nomad_consul_manage_token }}"
+        status_code:
+          - 200
+          - 404
+        validate_certs: "{{ nomad_consul_ssl | bool }}"
+        ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
+        client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
+        client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
+      loop: "{{ [nomad_consul_service_auth_method, nomad_consul_task_auth_method] | unique }}"
+      register: _nomad_consul_auth_method_read
+      # The Consul restart that activates ACLs is flushed right before this
+      # include; give the server time to elect a leader on the first run.
+      until: _nomad_consul_auth_method_read.status in [200, 404]
+      retries: 12
+      delay: 5
+      changed_when: false
+      no_log: true
 
-  - name: Consul Workload Identity | create auth method
-    ansible.builtin.uri:
-      url: "{{ _nomad_consul_api_url }}/v1/acl/auth-method"
-      method: PUT
-      headers:
-        X-Consul-Token: "{{ _nomad_consul_manage_token }}"
-      body:
-        Name: "{{ item.item }}"
-        Type: "jwt"
-        DisplayName: "{{ item.item }}"
-        Description: "{{ nomad_consul_auth_method_description }}"
-        TokenLocality: "local"
-        Config: "{{ _nomad_consul_auth_method_config }}"
-      body_format: json
-      status_code:
-        - 200
-      validate_certs: "{{ nomad_consul_ssl | bool }}"
-      ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
-      client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
-      client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
-    loop: "{{ _nomad_consul_auth_method_read.results }}"
-    when: item.status == 404
-    register: _nomad_consul_auth_method_created
-    until: _nomad_consul_auth_method_created.status | default(0) == 200
-    retries: 6
-    delay: 5
-    changed_when: true
-    no_log: true
+    - name: Consul Workload Identity | create auth method
+      ansible.builtin.uri:
+        url: "{{ _nomad_consul_api_url }}/v1/acl/auth-method"
+        method: PUT
+        headers:
+          X-Consul-Token: "{{ _nomad_consul_manage_token }}"
+        body:
+          Name: "{{ item.item }}"
+          Type: "jwt"
+          DisplayName: "{{ item.item }}"
+          Description: "{{ nomad_consul_auth_method_description }}"
+          TokenLocality: "local"
+          Config: "{{ _nomad_consul_auth_method_config }}"
+        body_format: json
+        status_code:
+          - 200
+        validate_certs: "{{ nomad_consul_ssl | bool }}"
+        ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
+        client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
+        client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
+      loop: "{{ _nomad_consul_auth_method_read.results }}"
+      when: item.status == 404
+      register: _nomad_consul_auth_method_created
+      until: _nomad_consul_auth_method_created.status | default(0) == 200
+      retries: 6
+      delay: 5
+      changed_when: true
+      no_log: true
 
-  - name: Consul Workload Identity | update auth method
-    ansible.builtin.uri:
-      url: "{{ _nomad_consul_api_url }}/v1/acl/auth-method/{{ item.item }}"
-      method: PUT
-      headers:
-        X-Consul-Token: "{{ _nomad_consul_manage_token }}"
-      body:
-        Name: "{{ item.item }}"
-        Description: "{{ nomad_consul_auth_method_description }}"
-        TokenLocality: "local"
-        Config: "{{ _nomad_consul_auth_method_config }}"
-      body_format: json
-      status_code:
-        - 200
-      validate_certs: "{{ nomad_consul_ssl | bool }}"
-      ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
-      client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
-      client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
-    loop: "{{ _nomad_consul_auth_method_read.results }}"
-    when:
-      - item.status == 200
-      - item.json.Config.JWKSURL | default('') != _nomad_consul_auth_method_config.JWKSURL
-        or item.json.Config.BoundAudiences | default([]) != _nomad_consul_auth_method_config.BoundAudiences
-        or item.json.Config.JWTSupportedAlgs | default([]) != _nomad_consul_auth_method_config.JWTSupportedAlgs
-        or item.json.Config.ClaimMappings | default({}) != _nomad_consul_auth_method_config.ClaimMappings
-        or item.json.Config.JWKSCACert | default('') != _nomad_consul_auth_method_config.JWKSCACert | default('')
-        or item.json.Description | default('') != nomad_consul_auth_method_description
-        or item.json.TokenLocality | default('') != 'local'
-    changed_when: true
-    no_log: true
+    - name: Consul Workload Identity | update auth method
+      ansible.builtin.uri:
+        url: "{{ _nomad_consul_api_url }}/v1/acl/auth-method/{{ item.item }}"
+        method: PUT
+        headers:
+          X-Consul-Token: "{{ _nomad_consul_manage_token }}"
+        body:
+          Name: "{{ item.item }}"
+          Description: "{{ nomad_consul_auth_method_description }}"
+          TokenLocality: "local"
+          Config: "{{ _nomad_consul_auth_method_config }}"
+        body_format: json
+        status_code:
+          - 200
+        validate_certs: "{{ nomad_consul_ssl | bool }}"
+        ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
+        client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
+        client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
+      loop: "{{ _nomad_consul_auth_method_read.results }}"
+      when:
+        - item.status == 200
+        - item.json.Config.JWKSURL | default('') != _nomad_consul_auth_method_config.JWKSURL
+          or item.json.Config.BoundAudiences | default([]) != _nomad_consul_auth_method_config.BoundAudiences
+          or item.json.Config.JWTSupportedAlgs | default([]) != _nomad_consul_auth_method_config.JWTSupportedAlgs
+          or item.json.Config.ClaimMappings | default({}) != _nomad_consul_auth_method_config.ClaimMappings
+          or item.json.Config.JWKSCACert | default('') != _nomad_consul_auth_method_config.JWKSCACert | default('')
+          or item.json.Description | default('') != nomad_consul_auth_method_description
+          or item.json.TokenLocality | default('') != 'local'
+      changed_when: true
+      no_log: true
 
-  - name: Consul Workload Identity | read binding rules
-    ansible.builtin.uri:
-      url: "{{ _nomad_consul_api_url }}/v1/acl/binding-rules"
-      method: GET
-      headers:
-        X-Consul-Token: "{{ _nomad_consul_manage_token }}"
-      status_code:
-        - 200
-        - 404
-      validate_certs: "{{ nomad_consul_ssl | bool }}"
-      ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
-      client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
-      client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
-    register: _nomad_consul_binding_rules_read
-    changed_when: false
-    no_log: true
+    - name: Consul Workload Identity | read binding rules
+      ansible.builtin.uri:
+        url: "{{ _nomad_consul_api_url }}/v1/acl/binding-rules"
+        method: GET
+        headers:
+          X-Consul-Token: "{{ _nomad_consul_manage_token }}"
+        status_code:
+          - 200
+          - 404
+        validate_certs: "{{ nomad_consul_ssl | bool }}"
+        ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
+        client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
+        client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
+      register: _nomad_consul_binding_rules_read
+      changed_when: false
+      no_log: true
 
-  - name: Consul Workload Identity | define desired binding rules
-    ansible.builtin.set_fact:
-      _nomad_consul_service_rule_desired:
-        AuthMethod: "{{ nomad_consul_service_auth_method }}"
-        Description: "Binding rule for Nomad services authenticated using a workload identity"
-        Selector: "\"nomad_service\" in value"
-        BindType: "service"
-        BindName: "{{ nomad_consul_service_binding_name }}"
-      _nomad_consul_task_rule_desired:
-        AuthMethod: "{{ nomad_consul_task_auth_method }}"
-        Description: "Binding rule for Nomad tasks authenticated using a workload identity"
-        Selector: "\"nomad_service\" not in value"
-        BindType: "role"
-        BindName: "{{ nomad_consul_task_binding_name }}"
+    - name: Consul Workload Identity | define desired binding rules
+      ansible.builtin.set_fact:
+        _nomad_consul_service_rule_desired:
+          AuthMethod: "{{ nomad_consul_service_auth_method }}"
+          Description: "Binding rule for Nomad services authenticated using a workload identity"
+          Selector: "\"nomad_service\" in value"
+          BindType: "service"
+          BindName: "{{ nomad_consul_service_binding_name }}"
+        _nomad_consul_task_rule_desired:
+          AuthMethod: "{{ nomad_consul_task_auth_method }}"
+          Description: "Binding rule for Nomad tasks authenticated using a workload identity"
+          Selector: "\"nomad_service\" not in value"
+          BindType: "role"
+          BindName: "{{ nomad_consul_task_binding_name }}"
 
-  - name: Consul Workload Identity | find existing binding rules
-    ansible.builtin.set_fact:
-      _nomad_consul_service_rule: "{{ _nomad_consul_binding_rules_read.json
-        | selectattr('AuthMethod', '==', nomad_consul_service_auth_method)
-        | selectattr('BindType', '==', 'service')
-        | list | first | default(none) }}"
-      _nomad_consul_task_rule: "{{ _nomad_consul_binding_rules_read.json
-        | selectattr('AuthMethod', '==', nomad_consul_task_auth_method)
-        | selectattr('BindType', '==', 'role')
-        | selectattr('Selector', '==', '\"nomad_service\" not in value')
-        | list | first | default(none) }}"
+    - name: Consul Workload Identity | find existing binding rules
+      ansible.builtin.set_fact:
+        _nomad_consul_service_rule: "{{ _nomad_consul_binding_rules_read.json
+          | selectattr('AuthMethod', '==', nomad_consul_service_auth_method)
+          | selectattr('BindType', '==', 'service')
+          | list | first | default(none) }}"
+        _nomad_consul_task_rule: "{{ _nomad_consul_binding_rules_read.json
+          | selectattr('AuthMethod', '==', nomad_consul_task_auth_method)
+          | selectattr('BindType', '==', 'role')
+          | selectattr('Selector', '==', '\"nomad_service\" not in value')
+          | list | first | default(none) }}"
 
-  - name: Consul Workload Identity | create service binding rule
-    ansible.builtin.uri:
-      url: "{{ _nomad_consul_api_url }}/v1/acl/binding-rule"
-      method: PUT
-      headers:
-        X-Consul-Token: "{{ _nomad_consul_manage_token }}"
-      body: "{{ _nomad_consul_service_rule_desired }}"
-      body_format: json
-      status_code:
-        - 200
-      validate_certs: "{{ nomad_consul_ssl | bool }}"
-      ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
-      client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
-      client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
-    when: _nomad_consul_service_rule is none
-    changed_when: true
-    no_log: true
+    - name: Consul Workload Identity | create service binding rule
+      ansible.builtin.uri:
+        url: "{{ _nomad_consul_api_url }}/v1/acl/binding-rule"
+        method: PUT
+        headers:
+          X-Consul-Token: "{{ _nomad_consul_manage_token }}"
+        body: "{{ _nomad_consul_service_rule_desired }}"
+        body_format: json
+        status_code:
+          - 200
+        validate_certs: "{{ nomad_consul_ssl | bool }}"
+        ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
+        client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
+        client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
+      when: _nomad_consul_service_rule is none
+      changed_when: true
+      no_log: true
 
-  - name: Consul Workload Identity | update service binding rule
-    ansible.builtin.uri:
-      url: "{{ _nomad_consul_api_url }}/v1/acl/binding-rule/{{ _nomad_consul_service_rule.ID | default('') }}"
-      method: PUT
-      headers:
-        X-Consul-Token: "{{ _nomad_consul_manage_token }}"
-      body: "{{ _nomad_consul_service_rule_desired }}"
-      body_format: json
-      status_code:
-        - 200
-      validate_certs: "{{ nomad_consul_ssl | bool }}"
-      ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
-      client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
-      client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
-    when:
-      - _nomad_consul_service_rule is not none
-      - _nomad_consul_service_rule.BindName | default('') != _nomad_consul_service_rule_desired.BindName
-        or _nomad_consul_service_rule.Description | default('') != _nomad_consul_service_rule_desired.Description
-    changed_when: true
-    no_log: true
+    - name: Consul Workload Identity | update service binding rule
+      ansible.builtin.uri:
+        url: "{{ _nomad_consul_api_url }}/v1/acl/binding-rule/{{ _nomad_consul_service_rule.ID | default('') }}"
+        method: PUT
+        headers:
+          X-Consul-Token: "{{ _nomad_consul_manage_token }}"
+        body: "{{ _nomad_consul_service_rule_desired }}"
+        body_format: json
+        status_code:
+          - 200
+        validate_certs: "{{ nomad_consul_ssl | bool }}"
+        ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
+        client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
+        client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
+      when:
+        - _nomad_consul_service_rule is not none
+        - _nomad_consul_service_rule.BindName | default('') != _nomad_consul_service_rule_desired.BindName
+          or _nomad_consul_service_rule.Description | default('') != _nomad_consul_service_rule_desired.Description
+      changed_when: true
+      no_log: true
 
-  - name: Consul Workload Identity | create task binding rule
-    ansible.builtin.uri:
-      url: "{{ _nomad_consul_api_url }}/v1/acl/binding-rule"
-      method: PUT
-      headers:
-        X-Consul-Token: "{{ _nomad_consul_manage_token }}"
-      body: "{{ _nomad_consul_task_rule_desired }}"
-      body_format: json
-      status_code:
-        - 200
-      validate_certs: "{{ nomad_consul_ssl | bool }}"
-      ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
-      client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
-      client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
-    when: _nomad_consul_task_rule is none
-    changed_when: true
-    no_log: true
+    - name: Consul Workload Identity | create task binding rule
+      ansible.builtin.uri:
+        url: "{{ _nomad_consul_api_url }}/v1/acl/binding-rule"
+        method: PUT
+        headers:
+          X-Consul-Token: "{{ _nomad_consul_manage_token }}"
+        body: "{{ _nomad_consul_task_rule_desired }}"
+        body_format: json
+        status_code:
+          - 200
+        validate_certs: "{{ nomad_consul_ssl | bool }}"
+        ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
+        client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
+        client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
+      when: _nomad_consul_task_rule is none
+      changed_when: true
+      no_log: true
 
-  - name: Consul Workload Identity | update task binding rule
-    ansible.builtin.uri:
-      url: "{{ _nomad_consul_api_url }}/v1/acl/binding-rule/{{ _nomad_consul_task_rule.ID | default('') }}"
-      method: PUT
-      headers:
-        X-Consul-Token: "{{ _nomad_consul_manage_token }}"
-      body: "{{ _nomad_consul_task_rule_desired }}"
-      body_format: json
-      status_code:
-        - 200
-      validate_certs: "{{ nomad_consul_ssl | bool }}"
-      ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
-      client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
-      client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
-    when:
-      - _nomad_consul_task_rule is not none
-      - _nomad_consul_task_rule.BindName | default('') != _nomad_consul_task_rule_desired.BindName
-        or _nomad_consul_task_rule.Description | default('') != _nomad_consul_task_rule_desired.Description
-    changed_when: true
-    no_log: true
+    - name: Consul Workload Identity | update task binding rule
+      ansible.builtin.uri:
+        url: "{{ _nomad_consul_api_url }}/v1/acl/binding-rule/{{ _nomad_consul_task_rule.ID | default('') }}"
+        method: PUT
+        headers:
+          X-Consul-Token: "{{ _nomad_consul_manage_token }}"
+        body: "{{ _nomad_consul_task_rule_desired }}"
+        body_format: json
+        status_code:
+          - 200
+        validate_certs: "{{ nomad_consul_ssl | bool }}"
+        ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
+        client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
+        client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
+      when:
+        - _nomad_consul_task_rule is not none
+        - _nomad_consul_task_rule.BindName | default('') != _nomad_consul_task_rule_desired.BindName
+          or _nomad_consul_task_rule.Description | default('') != _nomad_consul_task_rule_desired.Description
+      changed_when: true
+      no_log: true
 
-  - name: Consul Workload Identity | read task policy
-    ansible.builtin.uri:
-      url: "{{ _nomad_consul_api_url }}/v1/acl/policy/name/{{ nomad_consul_task_policy_name }}"
-      method: GET
-      headers:
-        X-Consul-Token: "{{ _nomad_consul_manage_token }}"
-      status_code:
-        - 200
-        - 404
-      validate_certs: "{{ nomad_consul_ssl | bool }}"
-      ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
-      client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
-      client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
-    register: _nomad_consul_policy_read
-    changed_when: false
-    no_log: true
+    - name: Consul Workload Identity | read task policy
+      ansible.builtin.uri:
+        url: "{{ _nomad_consul_api_url }}/v1/acl/policy/name/{{ nomad_consul_task_policy_name }}"
+        method: GET
+        headers:
+          X-Consul-Token: "{{ _nomad_consul_manage_token }}"
+        status_code:
+          - 200
+          - 404
+        validate_certs: "{{ nomad_consul_ssl | bool }}"
+        ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
+        client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
+        client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
+      register: _nomad_consul_policy_read
+      changed_when: false
+      no_log: true
 
-  - name: Consul Workload Identity | create task policy
-    ansible.builtin.uri:
-      url: "{{ _nomad_consul_api_url }}/v1/acl/policy"
-      method: PUT
-      headers:
-        X-Consul-Token: "{{ _nomad_consul_manage_token }}"
-      body:
-        Name: "{{ nomad_consul_task_policy_name }}"
-        Rules: "{{ nomad_consul_task_policy_rules }}"
-      body_format: json
-      status_code:
-        - 200
-      validate_certs: "{{ nomad_consul_ssl | bool }}"
-      ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
-      client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
-      client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
-    when: _nomad_consul_policy_read.status == 404
-    changed_when: true
-    no_log: true
+    - name: Consul Workload Identity | create task policy
+      ansible.builtin.uri:
+        url: "{{ _nomad_consul_api_url }}/v1/acl/policy"
+        method: PUT
+        headers:
+          X-Consul-Token: "{{ _nomad_consul_manage_token }}"
+        body:
+          Name: "{{ nomad_consul_task_policy_name }}"
+          Rules: "{{ nomad_consul_task_policy_rules }}"
+        body_format: json
+        status_code:
+          - 200
+        validate_certs: "{{ nomad_consul_ssl | bool }}"
+        ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
+        client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
+        client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
+      when: _nomad_consul_policy_read.status == 404
+      changed_when: true
+      no_log: true
 
-  - name: Consul Workload Identity | update task policy
-    ansible.builtin.uri:
-      url: "{{ _nomad_consul_api_url }}/v1/acl/policy/{{ _nomad_consul_policy_read.json.ID | default('') }}"
-      method: PUT
-      headers:
-        X-Consul-Token: "{{ _nomad_consul_manage_token }}"
-      body:
-        Name: "{{ nomad_consul_task_policy_name }}"
-        Rules: "{{ nomad_consul_task_policy_rules }}"
-      body_format: json
-      status_code:
-        - 200
-      validate_certs: "{{ nomad_consul_ssl | bool }}"
-      ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
-      client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
-      client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
-    when:
-      - _nomad_consul_policy_read.status == 200
-      - _nomad_consul_policy_read.json.Rules | default('') != nomad_consul_task_policy_rules
-    changed_when: true
-    no_log: true
+    - name: Consul Workload Identity | update task policy
+      ansible.builtin.uri:
+        url: "{{ _nomad_consul_api_url }}/v1/acl/policy/{{ _nomad_consul_policy_read.json.ID | default('') }}"
+        method: PUT
+        headers:
+          X-Consul-Token: "{{ _nomad_consul_manage_token }}"
+        body:
+          Name: "{{ nomad_consul_task_policy_name }}"
+          Rules: "{{ nomad_consul_task_policy_rules }}"
+        body_format: json
+        status_code:
+          - 200
+        validate_certs: "{{ nomad_consul_ssl | bool }}"
+        ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
+        client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
+        client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
+      when:
+        - _nomad_consul_policy_read.status == 200
+        - _nomad_consul_policy_read.json.Rules | default('') != nomad_consul_task_policy_rules
+      changed_when: true
+      no_log: true
 
-  - name: Consul Workload Identity | read task role
-    ansible.builtin.uri:
-      url: "{{ _nomad_consul_api_url }}/v1/acl/role/name/{{ nomad_consul_task_role_name }}"
-      method: GET
-      headers:
-        X-Consul-Token: "{{ _nomad_consul_manage_token }}"
-      status_code:
-        - 200
-        - 404
-      validate_certs: "{{ nomad_consul_ssl | bool }}"
-      ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
-      client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
-      client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
-    register: _nomad_consul_role_read
-    changed_when: false
-    no_log: true
+    - name: Consul Workload Identity | read task role
+      ansible.builtin.uri:
+        url: "{{ _nomad_consul_api_url }}/v1/acl/role/name/{{ nomad_consul_task_role_name }}"
+        method: GET
+        headers:
+          X-Consul-Token: "{{ _nomad_consul_manage_token }}"
+        status_code:
+          - 200
+          - 404
+        validate_certs: "{{ nomad_consul_ssl | bool }}"
+        ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
+        client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
+        client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
+      register: _nomad_consul_role_read
+      changed_when: false
+      no_log: true
 
-  - name: Consul Workload Identity | create task role
-    ansible.builtin.uri:
-      url: "{{ _nomad_consul_api_url }}/v1/acl/role"
-      method: PUT
-      headers:
-        X-Consul-Token: "{{ _nomad_consul_manage_token }}"
-      body:
-        Name: "{{ nomad_consul_task_role_name }}"
-        Description: "{{ nomad_consul_task_role_description }}"
-        Policies:
-          - Name: "{{ nomad_consul_task_policy_name }}"
-      body_format: json
-      status_code:
-        - 200
-      validate_certs: "{{ nomad_consul_ssl | bool }}"
-      ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
-      client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
-      client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
-    when: _nomad_consul_role_read.status == 404
-    changed_when: true
-    no_log: true
+    - name: Consul Workload Identity | create task role
+      ansible.builtin.uri:
+        url: "{{ _nomad_consul_api_url }}/v1/acl/role"
+        method: PUT
+        headers:
+          X-Consul-Token: "{{ _nomad_consul_manage_token }}"
+        body:
+          Name: "{{ nomad_consul_task_role_name }}"
+          Description: "{{ nomad_consul_task_role_description }}"
+          Policies:
+            - Name: "{{ nomad_consul_task_policy_name }}"
+        body_format: json
+        status_code:
+          - 200
+        validate_certs: "{{ nomad_consul_ssl | bool }}"
+        ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
+        client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
+        client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
+      when: _nomad_consul_role_read.status == 404
+      changed_when: true
+      no_log: true
 
-  - name: Consul Workload Identity | update task role
-    ansible.builtin.uri:
-      url: "{{ _nomad_consul_api_url }}/v1/acl/role/{{ _nomad_consul_role_read.json.ID | default('') }}"
-      method: PUT
-      headers:
-        X-Consul-Token: "{{ _nomad_consul_manage_token }}"
-      body:
-        Name: "{{ nomad_consul_task_role_name }}"
-        Description: "{{ nomad_consul_task_role_description }}"
-        Policies:
-          - Name: "{{ nomad_consul_task_policy_name }}"
-      body_format: json
-      status_code:
-        - 200
-      validate_certs: "{{ nomad_consul_ssl | bool }}"
-      ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
-      client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
-      client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
-    when:
-      - _nomad_consul_role_read.status == 200
-      - _nomad_consul_role_read.json.Policies | default([]) | map(attribute='Name') | list != [nomad_consul_task_policy_name]
-        or _nomad_consul_role_read.json.Description | default('') != nomad_consul_task_role_description
-    changed_when: true
-    no_log: true
+    - name: Consul Workload Identity | update task role
+      ansible.builtin.uri:
+        url: "{{ _nomad_consul_api_url }}/v1/acl/role/{{ _nomad_consul_role_read.json.ID | default('') }}"
+        method: PUT
+        headers:
+          X-Consul-Token: "{{ _nomad_consul_manage_token }}"
+        body:
+          Name: "{{ nomad_consul_task_role_name }}"
+          Description: "{{ nomad_consul_task_role_description }}"
+          Policies:
+            - Name: "{{ nomad_consul_task_policy_name }}"
+        body_format: json
+        status_code:
+          - 200
+        validate_certs: "{{ nomad_consul_ssl | bool }}"
+        ca_path: "{{ nomad_consul_ca_file if (nomad_consul_ssl | bool and nomad_consul_ca_file | length > 0) else omit }}"
+        client_cert: "{{ nomad_consul_cert_file if (nomad_consul_ssl | bool and nomad_consul_cert_file | length > 0) else omit }}"
+        client_key: "{{ nomad_consul_key_file if (nomad_consul_ssl | bool and nomad_consul_key_file | length > 0) else omit }}"
+      when:
+        - _nomad_consul_role_read.status == 200
+        - _nomad_consul_role_read.json.Policies | default([]) | map(attribute='Name') | list != [nomad_consul_task_policy_name]
+          or _nomad_consul_role_read.json.Description | default('') != nomad_consul_task_role_description
+      changed_when: true
+      no_log: true
 
-  - name: Consul Workload Identity | summary
-    ansible.builtin.debug:
-      msg:
-        - "Consul auth method(s): {{ [nomad_consul_service_auth_method, nomad_consul_task_auth_method] | unique | join(', ') }}"
-        - "JWKS URL: {{ nomad_consul_jwks_url }}"
-        - "Task policy: {{ nomad_consul_task_policy_name }}"
-        - "Task role: {{ nomad_consul_task_role_name }}"
+    - name: Consul Workload Identity | summary
+      ansible.builtin.debug:
+        msg:
+          - "Consul auth method(s): {{ [nomad_consul_service_auth_method, nomad_consul_task_auth_method] | unique | join(', ') }}"
+          - "JWKS URL: {{ nomad_consul_jwks_url }}"
+          - "Task policy: {{ nomad_consul_task_policy_name }}"
+          - "Task role: {{ nomad_consul_task_role_name }}"
